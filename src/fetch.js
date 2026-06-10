@@ -233,3 +233,48 @@ export async function fetchTicker() {
   );
   return out.filter(Boolean);
 }
+
+// Daily OHLC candles (6-month snapshot) for the MARKET charts, fetched
+// server-side from Yahoo Finance and embedded into the page so the custom
+// Lightweight Charts can render them with full color control.
+const CHART_SYMBOLS = [
+  { y: '^GSPC', label: 'INDEX · S&P 500' },
+  { y: 'BTC-USD', label: 'CRYPTO · BITCOIN' },
+];
+
+async function yahooCandles(sym) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 9000);
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=6mo`,
+      { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    clearTimeout(timer);
+    if (!res.ok) return [];
+    const j = await res.json();
+    const r = j?.chart?.result?.[0];
+    const ts = r?.timestamp;
+    const q = r?.indicators?.quote?.[0];
+    if (!Array.isArray(ts) || !q) return [];
+    const out = [];
+    for (let i = 0; i < ts.length; i++) {
+      const o = q.open?.[i];
+      const h = q.high?.[i];
+      const l = q.low?.[i];
+      const c = q.close?.[i];
+      if ([o, h, l, c].some((v) => typeof v !== 'number')) continue;
+      out.push({ time: new Date(ts[i] * 1000).toISOString().slice(0, 10), open: o, high: h, low: l, close: c });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchCandles() {
+  const out = await Promise.all(
+    CHART_SYMBOLS.map(async (s) => ({ label: s.label, candles: await yahooCandles(s.y) }))
+  );
+  return out.filter((x) => x.candles.length);
+}
