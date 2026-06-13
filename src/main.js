@@ -40,13 +40,14 @@ async function main() {
   } catch (err) {
     // Don't crash the whole run — still produce a (placeholder) report.
     console.error(`  ✗ ${err.message}\n`);
-    summaries = articles.map(() => ({ summary: PLACEHOLDER, category: 'World' }));
+    summaries = articles.map(() => ({ summary: PLACEHOLDER, category: 'World', brief: '' }));
   }
 
   const results = articles.map((article, i) => ({
     article,
     summary: summaries[i].summary,
     category: summaries[i].category,
+    brief: summaries[i].brief,
   }));
 
   const [research, ticker] = await Promise.all([fetchResearch(), fetchTicker()]);

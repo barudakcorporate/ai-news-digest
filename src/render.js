@@ -67,7 +67,7 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   }
 
   // Categories present (fixed preferred order first, then any extras), with counts.
-  const CAT_ORDER = ['Markets', 'Economy', 'Politics', 'Technology', 'Crypto', 'Business', 'World'];
+  const CAT_ORDER = ['Markets', 'Economy', 'Politics', 'Technology', 'Biotechnology', 'Crypto', 'Business', 'World'];
   const catCounts = {};
   for (const { category } of results) {
     const c = category || 'World';
@@ -85,7 +85,7 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   ].join('');
 
   const cards = results
-    .map(({ article, summary, category }) => {
+    .map(({ article, summary, category, brief }) => {
       const cat = category || 'World';
       const title = article.link
         ? `<a href="${esc(article.link)}" target="_blank" rel="noopener">${esc(article.title)}</a>`
@@ -94,11 +94,14 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
         ? `<img class="thumb" src="${esc(article.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
         : '';
       const summaryHtml = colorFields(marked.parse(summary));
+      // Full own-words brief, hidden in the card; the in-page reader displays it.
+      const briefHtml = brief ? `<div class="fullbrief" hidden>${marked.parse(brief)}</div>` : '';
       return `      <article class="card" data-cat="${esc(cat)}">
         <h2>${title}</h2>
         <div class="srcline"><span class="f f-cat">${esc(cat.toUpperCase())}</span> <span class="f f-src">SRC</span> ${esc(article.source)}</div>
         ${img}
         <div class="summary">${summaryHtml}</div>
+        ${briefHtml}
       </article>`;
     })
     .join('\n');
@@ -198,7 +201,8 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   .sectiontab:hover { color:var(--amber); }
   .sectiontab.active { color:var(--amber); border-bottom-color:var(--amber); }
   #marketView { padding:6px 0 0; }
-  .mkthead { color:var(--amber2); font-size:13px; letter-spacing:1px; margin:0 0 10px; }
+  .mkthead { color:var(--amber2); font-size:12px; font-weight:bold; letter-spacing:1.5px; text-transform:uppercase; margin:0 0 10px; display:flex; align-items:center; gap:12px; }
+  .mkthead::after { content:""; flex:1; border-top:1px solid var(--line); }
   /* custom Bloomberg-style amber ticker tape */
   .tickerbar { overflow:hidden; white-space:nowrap; border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:#000; padding:7px 0; margin:0 0 14px; }
   .tickertrack { display:inline-block; white-space:nowrap; will-change:transform; animation:tscroll 55s linear infinite; font-size:13px; letter-spacing:.5px; }
@@ -214,7 +218,32 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   .chartcell { border:1px solid var(--line); background:#0c0a06; border-radius:2px; padding:8px 8px 4px; }
   .chartlabel { color:var(--amber2); font-size:12px; font-weight:bold; letter-spacing:1px; margin:2px 0 8px; display:flex; justify-content:space-between; align-items:center; }
   .chartbox { height:520px; width:100%; }
-  .research { margin-top:24px; max-width:900px; }
+  .mktsec { margin-top:26px; }
+  .heatcell { height:680px; overflow:hidden; }
+  .heatcell .tradingview-widget-container { height:100%; margin:0; }
+  .duo { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap:18px; align-items:start; }
+  .panelbox { height:520px; border:1px solid var(--line); background:#0c0a06; border-radius:2px; overflow:hidden; }
+  .panelbox .tradingview-widget-container { height:100%; margin:0; }
+  .rscroll { overflow-y:auto; padding:2px 14px; }
+  .rscroll::-webkit-scrollbar { width:8px; }
+  .rscroll::-webkit-scrollbar-track { background:#0c0a06; }
+  .rscroll::-webkit-scrollbar-thumb { background:#2a2210; border-radius:4px; }
+  .rcard:last-child { border-bottom:none; }
+  /* in-page article reader (terminal-style modal) */
+  .reader { position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:50; display:none; align-items:flex-start; justify-content:center; overflow-y:auto; padding:42px 16px; }
+  .reader.open { display:flex; }
+  .rpanel { background:#0c0a06; border:1px solid #4a3a14; border-radius:2px; max-width:860px; width:100%; box-shadow:0 0 40px rgba(255,160,40,.07); }
+  .rphead { display:flex; justify-content:space-between; align-items:center; background:var(--amber); color:#000; padding:6px 12px; font-weight:bold; letter-spacing:1.5px; font-size:11px; }
+  .rpclose { cursor:pointer; background:none; border:none; font:inherit; color:#000; font-weight:bold; letter-spacing:1px; }
+  .rpclose:hover { opacity:.7; }
+  .rpbody { padding:18px 22px 26px; }
+  .rptitle { color:var(--amber2); font-size:19px; line-height:1.45; margin:8px 0 4px; font-weight:bold; }
+  .rpmeta { color:var(--dim); font-size:11px; letter-spacing:1px; }
+  .rpimg { display:block; width:100%; max-height:380px; object-fit:cover; border:1px solid var(--line); border-radius:2px; margin:12px 0 4px; }
+  .rpdivider { border:none; border-top:1px dashed var(--line); margin:14px 0; }
+  .rpsrc { display:inline-block; margin-top:18px; background:var(--amber); color:#000; font-weight:bold; padding:8px 16px; border-radius:2px; text-decoration:none; font-size:12px; letter-spacing:1px; }
+  .rpsrc:hover { background:var(--amber2); color:#000; }
+  h2 a { cursor:pointer; }
   .rcard { border-bottom:1px dashed var(--line); padding:11px 2px; }
   .rinst { display:inline-block; background:var(--amber); color:#000; font-weight:bold; font-size:10px; letter-spacing:1px; padding:1px 6px; border-radius:2px; margin-right:8px; }
   .rcard a { color:var(--amber2); text-decoration:none; font-size:14px; border-bottom:1px dotted #5a4a20; }
@@ -236,6 +265,9 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   .f-src { padding:1px 6px; background:#1c1606; color:var(--amber); border:1px solid #4a3a14; border-radius:2px; }
   .f-cat { padding:1px 6px; background:var(--amber); color:#000; border-radius:2px; margin-right:4px; }
   .f-sum { color:var(--amber); }
+  .f-brief { color:var(--amber2); }
+  .fullbrief[hidden] { display:none; }
+  .rpbrief p { margin:9px 0; line-height:1.65; }
   .f-why { color:var(--cyan); }
   .f-mkt { color:var(--green); }
   ul { list-style:none; padding-left:2px; margin:6px 0; }
@@ -255,7 +287,7 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
     <span>AINEWS&lt;GO&gt;</span>
   </div>
   <div class="wrap">
-    <div class="status">▸ LIVE · <span id="clock">--:--:--</span> · AUTO-REFRESH <b>60s</b> · ${order.length} SOURCES<span class="blink">&nbsp;▍</span></div>
+    <div class="status">▸ LIVE · <span id="clock">--:--:--</span> · AUTO-REFRESH <b>5s</b> · ${order.length} SOURCES<span class="blink">&nbsp;▍</span></div>
     <h1>Jumpfigures — ${esc(dateStr)}</h1>
     <div class="meta">Generated ${now.toISOString()} · ${results.length} stories</div>
     <div class="sectiontabs" id="sectiontabs">
@@ -278,11 +310,23 @@ ${cards}
 
     <div id="marketView" hidden>
       ${tickerHtml ? `<div class="tickerbar"><div class="tickertrack">${tickerHtml}</div></div>` : ''}
-      <div class="mkthead">▸ LIVE MARKETS · stocks &amp; indices · crypto</div>
-      <div id="tvHost"></div>
-      <div class="research">
-        <div class="mkthead">▸ STREET RESEARCH · what major institutions are saying</div>
-        ${researchHtml}
+      <div class="mktsec">
+        <div class="mkthead">▸ MARKET HEATMAP</div>
+        <div id="heatHost" class="chartgrid"></div>
+      </div>
+      <div class="mktsec">
+        <div class="mkthead">▸ LIVE MARKETS</div>
+        <div id="tvHost"></div>
+      </div>
+      <div class="mktsec duo">
+        <div>
+          <div class="mkthead">▸ ECONOMIC CALENDAR</div>
+          <div id="calHost" class="panelbox"></div>
+        </div>
+        <div>
+          <div class="mkthead">▸ STREET RESEARCH</div>
+          <div class="panelbox rscroll">${researchHtml}</div>
+        </div>
       </div>
     </div>
     <div class="foot">JUMPFIGURES · powered by Gemini · ${order.map(esc).join(' · ')}</div>
@@ -347,13 +391,9 @@ ${cards}
         { label: 'CRYPTO · BITCOIN', sym: 'BINANCE:BTCUSDT' }
       ];
 
-      function addChart(grid, label, symbol) {
+      function addChart(grid, symbol) {
         var cell = document.createElement('div');
         cell.className = 'chartcell';
-        var head = document.createElement('div');
-        head.className = 'chartlabel';
-        head.textContent = label;
-        cell.appendChild(head);
         var box = document.createElement('div');
         box.className = 'tradingview-widget-container chartbox';
         box.innerHTML = '<div class="tradingview-widget-container__widget" style="width:100%"></div>';
@@ -372,24 +412,168 @@ ${cards}
         grid.appendChild(cell);
       }
 
+      function addWidget(host, file, config, cls) {
+        var box = document.createElement('div');
+        box.className = 'tradingview-widget-container' + (cls ? ' ' + cls : '');
+        var inner = document.createElement('div');
+        inner.className = 'tradingview-widget-container__widget';
+        inner.style.height = '100%';
+        box.appendChild(inner);
+        var s = document.createElement('script');
+        s.src = 'https://s3.tradingview.com/external-embedding/' + file;
+        s.async = true;
+        s.text = JSON.stringify(config);
+        box.appendChild(s);
+        host.appendChild(box);
+      }
+
       function loadMarket() {
         var host = document.getElementById('tvHost');
         host.innerHTML = '';
         var grid = document.createElement('div');
         grid.className = 'chartgrid';
         host.appendChild(grid);
-        for (var i = 0; i < PANELS.length; i++) addChart(grid, PANELS[i].label, PANELS[i].sym);
+        for (var i = 0; i < PANELS.length; i++) addChart(grid, PANELS[i].sym);
+
+        // Heatmaps: S&P 500 (by sector) + crypto (by market cap), live.
+        var heat = document.getElementById('heatHost');
+        heat.innerHTML = '';
+        var hc1 = document.createElement('div');
+        hc1.className = 'chartcell heatcell';
+        heat.appendChild(hc1);
+        addWidget(hc1, 'embed-widget-stock-heatmap.js', {
+          dataSource: 'SPX500', grouping: 'sector', blockSize: 'market_cap_basic',
+          blockColor: 'change', colorTheme: 'dark', locale: 'en', symbolUrl: '',
+          hasTopBar: false, isDataSetEnabled: false, isZoomEnabled: true,
+          hasSymbolTooltip: true, isMonoSize: false, width: '100%', height: '100%'
+        });
+        var hc2 = document.createElement('div');
+        hc2.className = 'chartcell heatcell';
+        heat.appendChild(hc2);
+        addWidget(hc2, 'embed-widget-crypto-coins-heatmap.js', {
+          dataSource: 'Crypto', blockSize: 'market_cap_calc', blockColor: '24h_close_change|5',
+          colorTheme: 'dark', locale: 'en', symbolUrl: '',
+          hasTopBar: false, isDataSetEnabled: false, isZoomEnabled: true,
+          hasSymbolTooltip: true, isMonoSize: false, width: '100%', height: '100%'
+        });
+
+        // Economic calendar: upcoming macro releases, medium+high impact.
+        var cal = document.getElementById('calHost');
+        cal.innerHTML = '';
+        addWidget(cal, 'embed-widget-events.js', {
+          colorTheme: 'dark', isTransparent: true, locale: 'en',
+          importanceFilter: '0,1', countryFilter: 'us,eu,cn,jp,gb,id',
+          width: '100%', height: '100%'
+        });
       }
 
-      // Live clock + auto-refresh every 60s (website only; email ignores JS).
-      // Skips reload when a menu is open, the tab is hidden, or MARKET is open.
+      // In-page article reader: clicking a story opens a terminal-style panel
+      // instead of navigating away. Built via JS so emails never see it.
+      var reader = document.createElement('div');
+      reader.className = 'reader';
+      reader.innerHTML =
+        '<div class="rpanel"><div class="rphead"><span>■ ARTICLE READER · JUMPFIGURES</span>' +
+        '<button class="rpclose" type="button">✕ CLOSE [ESC]</button></div>' +
+        '<div class="rpbody"></div></div>';
+      document.body.appendChild(reader);
+      var rpbody = reader.querySelector('.rpbody');
+
+      function openReader(card) {
+        var a = card.querySelector('h2 a');
+        var img = card.querySelector('img.thumb');
+        var src = card.querySelector('.srcline');
+        var sum = card.querySelector('.summary');
+        rpbody.innerHTML = '';
+        if (src) {
+          var meta = document.createElement('div');
+          meta.className = 'rpmeta';
+          meta.innerHTML = src.innerHTML;
+          rpbody.appendChild(meta);
+        }
+        var h = document.createElement('div');
+        h.className = 'rptitle';
+        h.textContent = a ? a.textContent : (card.querySelector('h2') || {}).textContent || '';
+        rpbody.appendChild(h);
+        if (img && img.style.display !== 'none' && img.src) {
+          var im = document.createElement('img');
+          im.className = 'rpimg';
+          im.src = img.src;
+          im.referrerPolicy = 'no-referrer';
+          im.onerror = function () { this.style.display = 'none'; };
+          rpbody.appendChild(im);
+        }
+        var hr = document.createElement('hr');
+        hr.className = 'rpdivider';
+        rpbody.appendChild(hr);
+        var bf = card.querySelector('.fullbrief');
+        if (bf) {
+          var bh = document.createElement('div');
+          bh.innerHTML = '<strong class="f f-brief">FULL STORY</strong>';
+          rpbody.appendChild(bh);
+          var b = document.createElement('div');
+          b.className = 'rpbrief';
+          b.innerHTML = bf.innerHTML;
+          rpbody.appendChild(b);
+          var hr2 = document.createElement('hr');
+          hr2.className = 'rpdivider';
+          rpbody.appendChild(hr2);
+        }
+        if (sum) {
+          var s = document.createElement('div');
+          s.innerHTML = sum.innerHTML;
+          rpbody.appendChild(s);
+        }
+        if (a && a.href) {
+          var btn = document.createElement('a');
+          btn.className = 'rpsrc';
+          btn.href = a.href;
+          btn.target = '_blank';
+          btn.rel = 'noopener';
+          btn.textContent = 'READ ORIGINAL SOURCE ↗';
+          rpbody.appendChild(btn);
+        }
+        reader.classList.add('open');
+        reader.scrollTop = 0;
+        document.body.style.overflow = 'hidden';
+      }
+      function closeReader() {
+        reader.classList.remove('open');
+        document.body.style.overflow = '';
+      }
+      reader.querySelector('.rpclose').addEventListener('click', closeReader);
+      reader.addEventListener('click', function (e) { if (e.target === reader) closeReader(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeReader(); });
+      for (var ci = 0; ci < cards.length; ci++) {
+        (function (card) {
+          var a = card.querySelector('h2 a');
+          var img = card.querySelector('img.thumb');
+          function open(e) { e.preventDefault(); openReader(card); }
+          if (a) a.addEventListener('click', open);
+          if (img) { img.style.cursor = 'pointer'; img.addEventListener('click', open); }
+        })(cards[ci]);
+      }
+
+      // Live clock (website only; email ignores JS).
       var clockEl = document.getElementById('clock');
       function tick() { if (clockEl) clockEl.textContent = new Date().toLocaleTimeString(); }
       tick();
       setInterval(tick, 1000);
+
+      // Auto-refresh: every 5s check (in the background) whether new content was
+      // published; reload only when it actually changed — keeps the page always
+      // fresh without flicker. Paused while reading, in a menu, or on MARKET.
+      var stampEl = document.querySelector('.meta');
+      var stamp = stampEl ? stampEl.textContent : '';
       setInterval(function () {
-        if (!document.hidden && list.hidden && marketView.hidden) location.reload();
-      }, 60000);
+        if (document.hidden || !list.hidden || !marketView.hidden || reader.classList.contains('open')) return;
+        fetch(window.location.href, { cache: 'no-store' })
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            var m = html.match(/<div class="meta">([^<]*)<\\/div>/);
+            if (m && stamp && m[1] !== stamp) window.location.reload();
+          })
+          .catch(function () {});
+      }, 5000);
     })();
   </script>
 </body>

@@ -16,6 +16,7 @@ export const CATEGORIES = [
   'Economy',
   'Politics',
   'Technology',
+  'Biotechnology',
   'Crypto',
   'Business',
   'World',
@@ -25,13 +26,20 @@ const SYSTEM_PROMPT = `You are a sharp financial and technology news analyst.
 You will receive several numbered news articles. For EACH article:
 
 1. Classify it into EXACTLY ONE category from this list:
-   Markets, Economy, Politics, Technology, Crypto, Business, World.
+   Markets, Economy, Politics, Technology, Biotechnology, Crypto, Business, World.
    (Markets = stocks/bonds/commodities/trading; Economy = macro/inflation/rates/
    central banks/jobs/trade; Politics = government/policy/elections/geopolitics/war;
-   Technology = tech/AI/software/startups; Crypto = crypto/blockchain/digital assets;
+   Technology = tech/AI/software/startups; Biotechnology = biotech/pharma/drugs/
+   clinical trials/FDA/medical science; Crypto = crypto/blockchain/digital assets;
    Business = companies/deals/M&A/earnings; World = anything else.)
 
-2. Write a concise structured analysis in markdown using EXACTLY this template:
+2. Write "brief": a comprehensive briefing of the full story IN YOUR OWN WORDS —
+   2–4 short paragraphs (markdown) covering EVERYTHING important from the provided
+   text: every key figure, number, percentage, date, name, and piece of context.
+   A reader of the brief should not need the original article. Do NOT copy
+   sentences verbatim from the source — rewrite everything.
+
+3. Write "summary": a concise structured analysis in markdown using EXACTLY this template:
 
 **Summary**
 - [3–5 bullets covering the key facts]
@@ -56,9 +64,10 @@ const RESPONSE_SCHEMA = {
     properties: {
       index: { type: Type.INTEGER, description: 'The 1-based article number' },
       category: { type: Type.STRING, enum: CATEGORIES, description: 'Best-fit category' },
+      brief: { type: Type.STRING, description: 'Comprehensive own-words briefing, 2-4 paragraphs' },
       summary: { type: Type.STRING, description: 'The markdown analysis block' },
     },
-    required: ['index', 'category', 'summary'],
+    required: ['index', 'category', 'brief', 'summary'],
   },
 };
 
@@ -75,7 +84,7 @@ const GEN_CONFIG = {
 
 // Articles per request. Cramming too many into one call can return a truncated
 // JSON (some get dropped), so we summarize in reliably-sized chunks.
-const CHUNK_SIZE = 6;
+const CHUNK_SIZE = 7; // 27 articles → 4 calls/run; keeps daily usage well under the 20/day free tier
 
 function isPerDayQuota(msg) {
   return /per[\s_-]?day|requestsperday/i.test(msg);
@@ -139,7 +148,7 @@ async function generateWithRetry(contents, config, maxRetries = 4) {
 // array of { summary, category } aligned to the input order; anything the model
 // omits — or a failed chunk — falls back to a graceful placeholder.
 export async function summarizeAll(articles) {
-  const out = articles.map(() => ({ summary: PLACEHOLDER, category: 'World' }));
+  const out = articles.map(() => ({ summary: PLACEHOLDER, category: 'World', brief: '' }));
 
   for (let start = 0; start < articles.length; start += CHUNK_SIZE) {
     const chunk = articles.slice(start, start + CHUNK_SIZE);
@@ -149,7 +158,8 @@ export async function summarizeAll(articles) {
           `### Article ${i + 1}`,
           `Title: ${a.title}`,
           `Source: ${a.source}`,
-          `Content: ${a.content}`,
+          // Full body when we could extract it; RSS snippet otherwise.
+          `Content: ${a.fulltext || a.content}`,
           `URL: ${a.link}`,
         ].join('\n')
       )
@@ -167,6 +177,7 @@ export async function summarizeAll(articles) {
           byIndex.set(item.index, {
             summary: String(item.summary).trim(),
             category: CATEGORIES.includes(item.category) ? item.category : 'World',
+            brief: String(item.brief || '').trim(),
           });
         }
       }

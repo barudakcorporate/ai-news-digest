@@ -29,6 +29,7 @@ const FEEDS = [
     url: 'https://news.google.com/rss/search?q=site:bloomberg.com+when:1d&hl=en-US&gl=US&ceid=US:en',
   },
   { name: 'MarketWatch', url: 'http://feeds.marketwatch.com/marketwatch/topstories/' },
+  { name: 'BioPharma Dive', url: 'https://www.biopharmadive.com/feeds/news/' },
 ];
 
 const MAX_ARTICLES_PER_FEED = 3;
@@ -73,9 +74,11 @@ function extractImage(item) {
   return '';
 }
 
-// Fallback: fetch the article page and read its og:image / twitter:image.
-// Bounded by a timeout and always fails soft (returns '' on any problem).
-async function fetchOgImage(url, timeoutMs = 8000) {
+// Fetch the article page once and pull both the lead image (og:image) and the
+// main body text. The text is NOT republished verbatim — it is only fed to
+// Gemini so the in-page reader can show a comprehensive brief in our own words.
+// Bounded by a timeout and always fails soft.
+async function fetchArticlePage(url, timeoutMs = 9000) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -85,15 +88,34 @@ async function fetchOgImage(url, timeoutMs = 8000) {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JumpfiguresBot/1.0)' },
     });
     clearTimeout(timer);
-    if (!res.ok) return '';
+    if (!res.ok) return { image: '', text: '' };
     const html = await res.text();
+
     const m =
       html.match(/<meta[^>]+property=["']og:image(?::url)?["'][^>]+content=["']([^"']+)["']/i) ||
       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ||
       html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
-    return m && /^https?:\/\//i.test(m[1]) ? m[1] : '';
+    const image = m && /^https?:\/\//i.test(m[1]) ? m[1] : '';
+
+    // Main text: prefer paragraphs inside <article>, else all paragraphs.
+    const scope = (html.match(/<article[\s\S]*?<\/article>/i) || [html])[0];
+    const paras = [...scope.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map((p) =>
+        p[1]
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;|&#160;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&#?\w+;/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      )
+      .filter((t) => t.length > 60); // skip boilerplate, captions, nav scraps
+    let text = paras.join('\n\n');
+    if (text.length < 400) text = ''; // too little to be the real article body
+    if (text.length > 4500) text = text.slice(0, 4500);
+    return { image, text };
   } catch {
-    return '';
+    return { image: '', text: '' };
   }
 }
 
@@ -112,6 +134,7 @@ export async function fetchAllFeeds() {
           content: extractSnippet(item),
           link: item.link || item.guid || '',
           image: extractImage(item),
+          fulltext: '',
         });
       }
 
@@ -121,19 +144,21 @@ export async function fetchAllFeeds() {
     }
   }
 
-  // Backfill missing images from each article's page (og:image), in parallel.
-  // Skip Google News links (Reuters/Bloomberg) — they're redirects, not articles.
-  const needImg = articles.filter(
-    (a) => !a.image && a.link && !a.link.includes('news.google.com')
-  );
-  if (needImg.length) {
+  // Enrich every direct-link article from its page, in parallel: lead image
+  // (og:image) + main body text for the AI brief. Skip Google News links
+  // (Reuters/Bloomberg) — they're redirects, not articles.
+  const enrich = articles.filter((a) => a.link && !a.link.includes('news.google.com'));
+  if (enrich.length) {
     await Promise.allSettled(
-      needImg.map(async (a) => {
-        a.image = await fetchOgImage(a.link);
+      enrich.map(async (a) => {
+        const page = await fetchArticlePage(a.link);
+        if (!a.image) a.image = page.image;
+        a.fulltext = page.text;
       })
     );
-    const got = needImg.filter((a) => a.image).length;
-    console.log(`  + recovered ${got}/${needImg.length} images from article pages`);
+    const gotImg = enrich.filter((a) => a.image).length;
+    const gotTxt = enrich.filter((a) => a.fulltext).length;
+    console.log(`  + enriched from article pages: ${gotImg} images, ${gotTxt} full texts`);
   }
 
   return articles;
