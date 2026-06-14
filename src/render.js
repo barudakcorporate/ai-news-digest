@@ -13,6 +13,18 @@ const COVER_KBD_SVG = (() => {
   }
 })();
 
+// Optional world-map cover backdrop. Drop assets/cover-map.jpg and it becomes the
+// ambient wallpaper behind the boot dashboard (in place of the keyboard). Inlined as
+// a data URI so the page stays self-contained. Fails soft (missing file → keyboard).
+const COVER_MAP_DATAURI = (() => {
+  try {
+    const buf = readFileSync(new URL('../assets/cover-map.jpg', import.meta.url));
+    return `data:image/jpeg;base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  }
+})();
+
 export function formatDate(now) {
   return now.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -214,6 +226,10 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   })();
   // Prefer a real keyboard SVG (assets/bloomberg-keyboard.svg) if the file exists.
   const covKbd = COVER_KBD_SVG || covKbdFallback;
+  // Cover backdrop: world map if assets/cover-map.jpg exists, else the keyboard.
+  const covBackdrop = COVER_MAP_DATAURI
+    ? `<div class="covmap"><img src="${COVER_MAP_DATAURI}" alt="" /></div>`
+    : `<div class="covkbd">${covKbd}</div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -368,7 +384,7 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
      pre-paint via html.js so email — which ignores the head script — never shows it) ---- */
   .cover { display:none; }
   html.js .cover {
-    display:grid; grid-template-rows:auto minmax(0,1fr) auto auto auto;
+    display:grid; grid-template-rows:auto minmax(0,1fr) auto auto;
     position:fixed; inset:0; z-index:100; overflow:hidden;
     background:${coverBgCss};
     transition:opacity .7s ease, visibility .7s ease;
@@ -394,6 +410,26 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   .covkbd .lbl-on { fill:#ffffff; }
   @keyframes kblink { 0%,100% { opacity:1; } 50% { opacity:.28; } }
   .covkbd .k-golbl { fill:#fff; font-family:monospace; font-weight:bold; font-size:26px; letter-spacing:2px; }
+  /* world-map backdrop (assets/cover-map.jpg) — global vessel/fishing density as an
+     ambient wallpaper behind the boot dashboard, in place of the keyboard. */
+  .covmap { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .covmap img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center center;
+    opacity:.86; filter:saturate(1.22) brightness(1.08) contrast(1.1); }
+  .covmap::after { content:""; position:absolute; inset:0;
+    background:radial-gradient(ellipse 82% 70% at 50% 44%, rgba(8,7,4,.12) 0%, rgba(6,5,3,.34) 70%, rgba(4,3,2,.52) 100%); }
+  /* softly pulsing financial-hub nodes over the map */
+  .covnodes { position:absolute; inset:0; z-index:1; pointer-events:none; }
+  .cnode { position:absolute; transform:translate(-50%,-50%); }
+  .cnode .dot { width:8px; height:8px; border-radius:50%; background:var(--amber2);
+    box-shadow:0 0 12px 2px rgba(255,176,72,.9); }
+  .cnode .ring { position:absolute; left:4px; top:4px; width:8px; height:8px; border-radius:50%;
+    transform:translate(-50%,-50%); border:1.5px solid rgba(255,176,72,.85);
+    animation:cnpulse 3s ease-out infinite; }
+  .cnode .clbl { position:absolute; left:13px; top:50%; transform:translateY(-50%);
+    color:var(--amber2); font-size:9.5px; font-weight:bold; letter-spacing:2px; white-space:nowrap;
+    text-shadow:0 0 6px #000, 0 0 6px #000; opacity:.85; }
+  @keyframes cnpulse { 0% { width:8px; height:8px; opacity:.85; }
+    100% { width:42px; height:42px; opacity:0; } }
   .coverscan { position:absolute; inset:0; z-index:5; pointer-events:none;
     background:linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,.16) 50%); background-size:100% 4px; }
   .coverscan::after { content:""; position:absolute; left:0; right:0; height:160px; top:-160px;
@@ -409,11 +445,13 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   .covtop .dot { opacity:.55; letter-spacing:2px; }
   .covtop .mid { opacity:.8; letter-spacing:3px; font-size:11px; }
   /* main 3-column grid: left board | center boot | right board */
-  .covmain { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) minmax(0,1fr);
-    gap:8px; padding:8px; min-height:0; }
+  .covmain { display:grid; grid-template-columns:minmax(0,1fr);
+    gap:10px; padding:12px; min-height:0; }
   .covpanel { display:flex; flex-direction:column; min-height:0;
-    border:1px solid var(--line); background:rgba(12,9,5,.52); overflow:hidden;
-    -webkit-backdrop-filter:blur(1px); backdrop-filter:blur(1px); }
+    border:1px solid var(--line); background:rgba(12,9,5,.5); overflow:hidden;
+    -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
+  /* minimal side panels: compact card pinned to the top, map breathes below */
+  .covside { align-self:start; }
   .ptitle { background:var(--amber); color:#000; font-weight:bold; font-size:10px; letter-spacing:1.5px;
     padding:3px 8px; display:flex; justify-content:space-between; }
   .ptitle .live { display:inline-flex; align-items:center; gap:5px; }
@@ -427,15 +465,14 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
   .qch { text-align:right; min-width:62px; font-variant-numeric:tabular-nums; }
   .qch.up { color:var(--green); } .qch.dn { color:#ff5c5c; }
   /* center boot panel */
-  .covcenter { align-items:center; justify-content:center; text-align:center; padding:18px 16px; }
-  .covbrand { font-size:clamp(30px,6.5vw,64px); font-weight:bold; letter-spacing:6px; line-height:1; color:var(--amber);
-    text-shadow:0 0 16px rgba(255,160,40,.5), 0 0 52px rgba(255,160,40,.2); animation:covflicker 4s infinite; }
+  .covcenter { align-items:center; justify-content:center; text-align:center; padding:18px 16px;
+    background:transparent; border:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+  .covbrand { font-size:clamp(34px,7.2vw,76px); font-weight:bold; letter-spacing:9px; line-height:1; color:var(--amber2);
+    text-shadow:0 0 10px rgba(255,176,72,.85), 0 0 30px rgba(255,160,40,.55), 0 0 70px rgba(255,160,40,.3); animation:covflicker 4s infinite; }
   @keyframes covflicker { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.4} 94%{opacity:1} 96%{opacity:.75} 97%{opacity:1} }
   .covsub { color:var(--amber2); letter-spacing:5px; font-size:clamp(9px,1.8vw,13px); margin-top:8px; }
-  .covchart { display:block; width:100%; max-width:480px; height:130px; margin:16px auto 10px;
-    border:1px solid var(--line); border-radius:2px; background:rgba(0,0,0,.35); }
   .covlog { color:var(--green); font-size:11.5px; line-height:1.65; text-align:left; width:100%; max-width:420px;
-    min-height:120px; margin:0 auto; white-space:pre-wrap; word-break:break-word; text-shadow:0 0 6px rgba(61,247,107,.35); }
+    min-height:120px; margin:26px auto 0; white-space:pre-wrap; word-break:break-word; text-shadow:0 0 6px rgba(61,247,107,.35); }
   .covbar { width:min(420px,90%); height:7px; border:1px solid var(--line); background:#0c0a06;
     border-radius:2px; overflow:hidden; margin:4px auto 0; }
   .covbar i { display:block; height:100%; width:0; border-radius:2px;
@@ -471,32 +508,28 @@ export function buildHtml(results, now, dateStr, research = [], ticker = []) {
 <body>
   <div class="cover" id="cover" aria-hidden="true">
     <canvas class="coverfx" id="coverfx"></canvas>
-    <div class="covkbd">${covKbd}</div>
+    ${covBackdrop}
+    <div class="covnodes">
+      <div class="cnode" style="left:19%;top:33%"><span class="dot"></span><span class="ring" style="animation-delay:0s"></span><span class="clbl">NEW YORK</span></div>
+      <div class="cnode" style="left:41%;top:21%"><span class="dot"></span><span class="ring" style="animation-delay:.9s"></span><span class="clbl">LONDON</span></div>
+      <div class="cnode" style="left:79%;top:53%"><span class="dot"></span><span class="ring" style="animation-delay:1.6s"></span><span class="clbl">SINGAPORE</span></div>
+      <div class="cnode" style="left:90%;top:33%"><span class="dot"></span><span class="ring" style="animation-delay:2.3s"></span><span class="clbl">TOKYO</span></div>
+    </div>
     <div class="covtop">
       <span><span class="dot">●&nbsp;●&nbsp;●</span>&nbsp;&nbsp;JUMPFIGURES&nbsp;TERMINAL</span>
       <span class="mid">MARKET&nbsp;INTELLIGENCE&nbsp;·&nbsp;SYSTEM&nbsp;BOOT</span>
       <span><span id="covclock">--:--:--</span>&nbsp;&nbsp;AINEWS&lt;GO&gt;</span>
     </div>
     <div class="covmain">
-      <div class="covpanel covside">
-        <div class="ptitle"><span>WORLD&nbsp;INDICES</span><span class="live">LIVE</span></div>
-        <div class="qboard" id="covBoardL"></div>
-      </div>
       <div class="covpanel covcenter">
         <div class="covbrand">JUMPFIGURES</div>
-        <div class="covsub">▸ MARKET INTELLIGENCE TERMINAL</div>
-        <canvas class="covchart" id="covchart"></canvas>
+        <div class="covsub">MARKET INTELLIGENCE TERMINAL</div>
         <pre class="covlog" id="covlog"></pre>
         <div class="covbar"><i id="covbarfill"></i></div>
-        <div class="coventer" id="coventer">▸ CLICK OR PRESS ENTER TO LAUNCH&nbsp;<span class="blink">▍</span></div>
-      </div>
-      <div class="covpanel covside">
-        <div class="ptitle"><span>CRYPTO&nbsp;·&nbsp;FX&nbsp;·&nbsp;CMDTY</span><span class="live">LIVE</span></div>
-        <div class="qboard" id="covBoardR"></div>
+        <div class="coventer" id="coventer">[ PRESS ENTER TO LAUNCH ]&nbsp;<span class="blink">▍</span></div>
       </div>
     </div>
     <div class="covcmd"><span class="prompt">JUMPFIGURES&gt;</span> <span id="covcmdtext"></span><span class="blink">▍</span></div>
-    <div class="covtape"><div class="covtapetrack">${covTape}</div></div>
     <div class="covfn">
       <span class="fk go"><b>F1</b>HELP</span>
       <span class="fk"><b>F2</b>NEWS</span>
@@ -600,83 +633,6 @@ ${cards}
           rain();
         }
 
-        // (1b) live streaming candlestick chart — the centerpiece
-        var chartCv = document.getElementById('covchart');
-        if (chartCv && chartCv.getContext) {
-          var cc = chartCv.getContext('2d');
-          var dpr = window.devicePixelRatio || 1;
-          var CW = 0, CH = 0, cwd = 9, gapX = 5, maxN = 0;
-          var candles = [], price = 5421, vel = 0, mid = 5421, lastCommit = 0;
-          var GRN = '#16d672', RED = '#ff3b3b';
-          function tickPrice() {
-            vel += (Math.random() - 0.5) * 2.4;
-            vel += (mid - price) * 0.0016;
-            vel *= 0.9;
-            price += vel;
-          }
-          function newCandle() { return { o: price, h: price, l: price, c: price }; }
-          function feed(cnd) { cnd.c = price; if (price > cnd.h) cnd.h = price; if (price < cnd.l) cnd.l = price; }
-          function chsz() {
-            CW = chartCv.clientWidth || 460;
-            CH = chartCv.clientHeight || 130;
-            chartCv.width = Math.round(CW * dpr);
-            chartCv.height = Math.round(CH * dpr);
-            cc.setTransform(dpr, 0, 0, dpr, 0, 0);
-            maxN = Math.floor(CW / (cwd + gapX)) + 1;
-            if (!candles.length) {
-              for (var i = 0; i < maxN; i++) {
-                var cnd = newCandle();
-                for (var k = 0; k < 9; k++) { tickPrice(); feed(cnd); }
-                candles.push(cnd);
-              }
-            }
-          }
-          chsz();
-          window.addEventListener('resize', chsz);
-          function drawChart(ts) {
-            ts = ts || 0;
-            tickPrice();
-            feed(candles[candles.length - 1]);
-            if (!lastCommit) lastCommit = ts;
-            if (ts - lastCommit > 600) {
-              lastCommit = ts;
-              candles.push(newCandle());
-              while (candles.length > maxN) candles.shift();
-            }
-            var lo = Infinity, hi = -Infinity;
-            for (var i = 0; i < candles.length; i++) {
-              if (candles[i].l < lo) lo = candles[i].l;
-              if (candles[i].h > hi) hi = candles[i].h;
-            }
-            var pad = (hi - lo) * 0.12 || 1; lo -= pad; hi += pad;
-            function yOf(p) { return CH - ((p - lo) / (hi - lo)) * CH; }
-            cc.clearRect(0, 0, CW, CH);
-            cc.strokeStyle = 'rgba(255,160,40,0.07)'; cc.lineWidth = 1;
-            for (var g = 1; g < 4; g++) { var gy = (CH / 4) * g; cc.beginPath(); cc.moveTo(0, gy); cc.lineTo(CW, gy); cc.stroke(); }
-            for (var j = 0; j < candles.length; j++) {
-              var k = candles[j];
-              var x = j * (cwd + gapX) + 1;
-              var up = k.c >= k.o;
-              var col = up ? GRN : RED;
-              cc.strokeStyle = col; cc.fillStyle = col;
-              var xc = x + cwd / 2;
-              cc.beginPath(); cc.moveTo(xc + 0.5, yOf(k.h)); cc.lineTo(xc + 0.5, yOf(k.l)); cc.stroke();
-              var yo = yOf(k.o), ycl = yOf(k.c);
-              var top = Math.min(yo, ycl), hgt = Math.max(2, Math.abs(yo - ycl));
-              cc.fillRect(x, top, cwd, hgt);
-            }
-            var last = candles[candles.length - 1];
-            var lastUp = last.c >= last.o;
-            cc.font = 'bold 11px monospace'; cc.textBaseline = 'top';
-            cc.textAlign = 'left'; cc.fillStyle = '#9a7b3f'; cc.fillText('SPX · LIVE', 5, 5);
-            cc.textAlign = 'right'; cc.fillStyle = lastUp ? GRN : RED;
-            cc.fillText(price.toLocaleString('en-US', { maximumFractionDigits: 2 }) + (lastUp ? '  \\u25B2' : '  \\u25BC'), CW - 5, 5);
-            cc.textAlign = 'left';
-            if (!reduce) raf2 = window.requestAnimationFrame(drawChart);
-          }
-          if (reduce) drawChart(0); else raf2 = window.requestAnimationFrame(drawChart);
-        }
-
         // (2) live-looking quote boards (random walk + cell flash on update)
         var allRows = [];
         function buildBoard(hostId, rows) {
@@ -701,30 +657,9 @@ ${cards}
           s.ch.textContent = (up ? '▲' : '▼') + Math.abs(s.chg).toFixed(2) + '%';
           s.ch.className = 'qch ' + (up ? 'up' : 'dn');
         }
-        buildBoard('covBoardL', [
-          ['S&P 500', 5431.20, 2], ['NASDAQ', 17680.40, 2], ['DOW', 38900.10, 2],
-          ['RUSSELL', 2030.50, 2], ['VIX', 13.42, 2], ['FTSE 100', 8240.30, 2],
-          ['DAX', 18500.20, 2], ['NIKKEI', 39100.00, 2], ['HANG SENG', 18900.00, 2],
-          ['US 10Y', 4.282, 3]
-        ]);
-        buildBoard('covBoardR', [
-          ['BTC', 65120, 0], ['ETH', 3420, 0], ['SOL', 152.30, 2], ['XRP', 0.5230, 4],
-          ['EUR/USD', 1.0850, 4], ['USD/JPY', 157.20, 2], ['GBP/USD', 1.2710, 4],
-          ['GOLD', 2332.40, 2], ['WTI', 78.40, 2], ['NAT GAS', 2.85, 2]
-        ]);
-        var tickT = setInterval(function () {
-          if (!allRows.length) return;
-          for (var k = 0; k < 3; k++) {
-            var s = allRows[Math.floor(Math.random() * allRows.length)];
-            var step = Math.random() * 0.6 - 0.3;
-            s.price = Math.max(0.0001, s.price * (1 + step / 100));
-            s.chg += step;
-            paintRow(s);
-            s.row.classList.add('flash');
-            (function (el) { later(function () { el.classList.remove('flash'); }, 240); })(s.row);
-          }
-        }, 700);
-        timers.push(tickT);
+        // side quote boards removed from the cover — keep tickT defined so launch()'s
+        // clearInterval(tickT) stays valid.
+        var tickT = 0;
 
         // (3) cover clock
         var covClock = document.getElementById('covclock');
@@ -748,13 +683,12 @@ ${cards}
         var cbar = document.getElementById('covbarfill');
         var center = document.getElementById('coventer');
         var lines = [
-          '> INITIALIZING JUMPFIGURES CORE ...',
-          '> ESTABLISHING MARKET DATA LINK ......... OK',
-          '> SYNCING ' + SRC + ' NEWS SOURCES ............ OK',
-          '> LOADING GEMINI INTELLIGENCE ENGINE .... OK',
-          '> INDEXING ' + STO + ' STORIES ................ OK',
-          '> RENDERING TERMINAL INTERFACE .......... OK',
-          '> ALL SYSTEMS NOMINAL'
+          'INITIALIZING MARKET CORE...',
+          'SYNCING GLOBAL EXCHANGES...',
+          'LOADING INTELLIGENCE ENGINE...',
+          'ANALYZING MARKET REGIME...',
+          'GENERATING SIGNALS...',
+          'READY.'
         ];
         var li = 0, buf = '', launched = false, autoT = 0;
         function launch() {
